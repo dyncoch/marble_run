@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_rapier3d::prelude::*;
 
 fn main() {
     App::new()
@@ -10,6 +11,8 @@ fn main() {
             }),
             ..default()
         }))
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugins(RapierDebugRenderPlugin::default()) // Optional: shows physics wireframes
         .add_systems(Startup, setup_scene)
         .run();
 }
@@ -33,56 +36,76 @@ fn setup_scene(
     });
 
     // Track dimensions
-    let track_depth = 20.0; // How far into the screen the track goes
-    let track_width = 8.0; // Total width of the U-shape
+    let track_depth = 20.0;
+    let track_width = 8.0;
     let track_thickness = 0.3;
     let wall_height = 0.8;
     let wall_thickness = 0.2;
 
-    // Main track floor (the bottom of the U)
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(track_width, track_thickness, track_depth)),
-        material: track_material.clone(),
-        transform: Transform::from_xyz(0.0, 0.0, 0.0),
-        ..default()
-    });
-
-    // Left wall (left side of the U)
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(wall_thickness, wall_height, track_depth)),
-        material: wall_material.clone(),
-        transform: Transform::from_xyz(
-            -track_width / 2.0 - wall_thickness / 2.0,
-            wall_height / 2.0,
-            0.0,
-        ),
-        ..default()
-    });
-
-    // Right wall (right side of the U)
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(wall_thickness, wall_height, track_depth)),
-        material: wall_material.clone(),
-        transform: Transform::from_xyz(
-            track_width / 2.0 + wall_thickness / 2.0,
-            wall_height / 2.0,
-            0.0,
-        ),
-        ..default()
-    });
-
-    // Add marble (sphere) - positioned at the back of the track
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Sphere::new(0.3)),
-        material: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.2, 0.8, 0.2), // Green marble
-            metallic: 0.3,
-            perceptual_roughness: 0.1,
+    // Main track floor (the bottom of the U) - STATIC PHYSICS BODY
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Cuboid::new(track_width, track_thickness, track_depth)),
+            material: track_material.clone(),
+            transform: Transform::from_xyz(0.0, 0.0, 0.0),
             ..default()
-        }),
-        transform: Transform::from_xyz(0.0, 0.5, -8.0), // Start at back of track, slightly above
-        ..default()
-    });
+        },
+        RigidBody::Fixed,
+        Collider::cuboid(track_width / 2.0, track_thickness / 2.0, track_depth / 2.0),
+        Friction::coefficient(0.7), // Some friction for realistic rolling
+    ));
+
+    // Left wall (left side of the U) - STATIC PHYSICS BODY
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Cuboid::new(wall_thickness, wall_height, track_depth)),
+            material: wall_material.clone(),
+            transform: Transform::from_xyz(
+                -track_width / 2.0 - wall_thickness / 2.0,
+                wall_height / 2.0,
+                0.0,
+            ),
+            ..default()
+        },
+        RigidBody::Fixed,
+        Collider::cuboid(wall_thickness / 2.0, wall_height / 2.0, track_depth / 2.0),
+    ));
+
+    // Right wall (right side of the U) - STATIC PHYSICS BODY
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Cuboid::new(wall_thickness, wall_height, track_depth)),
+            material: wall_material.clone(),
+            transform: Transform::from_xyz(
+                track_width / 2.0 + wall_thickness / 2.0,
+                wall_height / 2.0,
+                0.0,
+            ),
+            ..default()
+        },
+        RigidBody::Fixed,
+        Collider::cuboid(wall_thickness / 2.0, wall_height / 2.0, track_depth / 2.0),
+    ));
+
+    // Add marble (sphere) - DYNAMIC PHYSICS BODY
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Sphere::new(0.3)),
+            material: materials.add(StandardMaterial {
+                base_color: Color::srgb(0.2, 0.8, 0.2), // Green marble
+                metallic: 0.3,
+                perceptual_roughness: 0.1,
+                ..default()
+            }),
+            transform: Transform::from_xyz(0.0, 0.5, -8.0),
+            ..default()
+        },
+        RigidBody::Dynamic,
+        Collider::ball(0.3),
+        Restitution::coefficient(0.3),        // Some bounciness
+        Friction::coefficient(0.4),           // Rolling friction
+        ColliderMassProperties::Density(1.0), // Mass density
+    ));
 
     // Add camera - positioned behind and above like racing games
     commands.spawn(Camera3dBundle {
@@ -112,5 +135,19 @@ fn setup_scene(
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
         brightness: 300.0,
+    });
+
+    // Configure gravity - pointing down with standard Earth gravity
+    commands.insert_resource(RapierConfiguration {
+        gravity: Vec3::new(0.0, -9.81, 0.0),
+        physics_pipeline_active: true,
+        query_pipeline_active: true,
+        timestep_mode: TimestepMode::Variable {
+            max_dt: 1.0 / 60.0,
+            time_scale: 1.0,
+            substeps: 1,
+        },
+        scaled_shape_subdivision: 10,
+        force_update_from_transform_changes: false,
     });
 }

@@ -6,6 +6,7 @@ authors = ["Lucas F.Martins <dyncoch@gmail.com>"]
 
 [dependencies]
 bevy = { version = "0.14", features = ["default"] }
+bevy_rapier3d = { version = "0.27", features = ["simd-stable"] }
 
 # For WebAssembly builds later
 [target.wasm32-unknown-unknown.dependencies]
