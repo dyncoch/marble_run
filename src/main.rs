@@ -41,13 +41,15 @@ fn setup_scene(
     let track_thickness = 0.3;
     let wall_height = 0.8;
     let wall_thickness = 0.2;
+    let track_slope = 5.0_f32.to_radians(); // 5 degree slope down toward camera
 
-    // Main track floor (the bottom of the U) - STATIC PHYSICS BODY
+    // Main track floor (the bottom of the U) - STATIC PHYSICS BODY with slope
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(Cuboid::new(track_width, track_thickness, track_depth)),
             material: track_material.clone(),
-            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+            transform: Transform::from_xyz(0.0, 0.0, 0.0)
+                .with_rotation(Quat::from_rotation_x(track_slope)),
             ..default()
         },
         RigidBody::Fixed,
@@ -55,7 +57,7 @@ fn setup_scene(
         Friction::coefficient(0.7), // Some friction for realistic rolling
     ));
 
-    // Left wall (left side of the U) - STATIC PHYSICS BODY
+    // Left wall (left side of the U) - STATIC PHYSICS BODY with slope
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(Cuboid::new(wall_thickness, wall_height, track_depth)),
@@ -64,14 +66,15 @@ fn setup_scene(
                 -track_width / 2.0 - wall_thickness / 2.0,
                 wall_height / 2.0,
                 0.0,
-            ),
+            )
+            .with_rotation(Quat::from_rotation_x(track_slope)),
             ..default()
         },
         RigidBody::Fixed,
         Collider::cuboid(wall_thickness / 2.0, wall_height / 2.0, track_depth / 2.0),
     ));
 
-    // Right wall (right side of the U) - STATIC PHYSICS BODY
+    // Right wall (right side of the U) - STATIC PHYSICS BODY with slope
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(Cuboid::new(wall_thickness, wall_height, track_depth)),
@@ -80,14 +83,15 @@ fn setup_scene(
                 track_width / 2.0 + wall_thickness / 2.0,
                 wall_height / 2.0,
                 0.0,
-            ),
+            )
+            .with_rotation(Quat::from_rotation_x(track_slope)),
             ..default()
         },
         RigidBody::Fixed,
         Collider::cuboid(wall_thickness / 2.0, wall_height / 2.0, track_depth / 2.0),
     ));
 
-    // Add marble (sphere) - DYNAMIC PHYSICS BODY
+    // Add marble (sphere) - DYNAMIC PHYSICS BODY - positioned higher at back of sloped track
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(Sphere::new(0.3)),
@@ -97,7 +101,7 @@ fn setup_scene(
                 perceptual_roughness: 0.1,
                 ..default()
             }),
-            transform: Transform::from_xyz(0.0, 0.5, -8.0),
+            transform: Transform::from_xyz(0.0, 2.0, -8.0), // Start higher due to slope
             ..default()
         },
         RigidBody::Dynamic,
@@ -105,6 +109,10 @@ fn setup_scene(
         Restitution::coefficient(0.3),        // Some bounciness
         Friction::coefficient(0.4),           // Rolling friction
         ColliderMassProperties::Density(1.0), // Mass density
+        Velocity {
+            linvel: Vec3::new(0.0, 0.0, 2.0), // Small forward push (positive Z = toward camera)
+            angvel: Vec3::ZERO,
+        },
     ));
 
     // Add camera - positioned behind and above like racing games
