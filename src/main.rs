@@ -22,7 +22,7 @@ fn main() {
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugins(RapierDebugRenderPlugin::default()) // Optional: shows physics wireframes
         .add_systems(Startup, setup_scene)
-        .add_systems(Update, camera_follow_system)
+        .add_systems(Update, (camera_follow_system, marble_control_system))
         .run();
 }
 
@@ -45,7 +45,7 @@ fn setup_scene(
     });
 
     // Track dimensions
-    let track_depth = 20.0;
+    let track_depth = 2000.0;
     let track_width = 8.0;
     let track_thickness = 0.3;
     let wall_height = 0.8;
@@ -173,6 +173,29 @@ fn setup_scene(
     });
 }
 
+fn marble_control_system(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut marble_query: Query<&mut Velocity, With<Marble>>,
+) {
+    if let Ok(mut velocity) = marble_query.get_single_mut() {
+        let control_force = 5.0; // Strength of left/right movement
+        let mut lateral_force = 0.0;
+
+        // Check for left/right input
+        if keyboard_input.pressed(KeyCode::ArrowLeft) {
+            lateral_force += control_force;
+        }
+        if keyboard_input.pressed(KeyCode::ArrowRight) {
+            lateral_force -= control_force;
+        }
+
+        // Apply lateral movement while preserving forward momentum
+        velocity.linvel.x = lateral_force;
+        // Keep the marble rolling forward - don't interfere with Z velocity
+        // Keep Y velocity for physics (gravity, bouncing)
+    }
+}
+
 fn camera_follow_system(
     mut camera_query: Query<&mut Transform, (With<FollowCamera>, Without<Marble>)>,
     marble_query: Query<&Transform, (With<Marble>, Without<FollowCamera>)>,
@@ -184,19 +207,27 @@ fn camera_follow_system(
         // Camera offset relative to marble (behind and above)
         let camera_offset = Vec3::new(0.0, 5.0, -9.0);
 
-        // Target camera position
-        let target_camera_pos = marble_transform.translation + camera_offset;
+        // Target camera position - follows marble's X and Z, but keeps fixed Y offset
+        let target_camera_pos = Vec3::new(
+            marble_transform.translation.x, // Follow left/right movement
+            marble_transform.translation.y + camera_offset.y, // Fixed height above marble
+            marble_transform.translation.z + camera_offset.z, // Follow forward/back movement
+        );
 
         // Smooth camera movement using interpolation
-        let lerp_speed = 3.0; // Adjust for faster/slower camera following
+        let lerp_speed = 10.0;
         let current_pos = camera_transform.translation;
         let new_pos = current_pos.lerp(target_camera_pos, lerp_speed * time.delta_seconds());
 
         // Update camera position
         camera_transform.translation = new_pos;
 
-        // Make camera look at the marble (with slight forward offset for better view)
-        let look_target = marble_transform.translation + Vec3::new(0.0, 0.0, 3.0);
+        // Fixed forward-looking direction - no rotation, always look straight ahead
+        let look_target = Vec3::new(
+            camera_transform.translation.x, // Same X as camera (no left/right rotation)
+            camera_transform.translation.y - 2.0, // Look slightly down
+            camera_transform.translation.z + 10.0, // Look straight ahead
+        );
         camera_transform.look_at(look_target, Vec3::Y);
     }
 }
