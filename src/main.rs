@@ -1,6 +1,14 @@
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 
+// Component to mark the marble
+#[derive(Component)]
+struct Marble;
+
+// Component to mark the camera that should follow
+#[derive(Component)]
+struct FollowCamera;
+
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -14,6 +22,7 @@ fn main() {
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugins(RapierDebugRenderPlugin::default()) // Optional: shows physics wireframes
         .add_systems(Startup, setup_scene)
+        .add_systems(Update, camera_follow_system)
         .run();
 }
 
@@ -113,14 +122,18 @@ fn setup_scene(
             linvel: Vec3::new(0.0, 0.0, 2.0), // Small forward push (positive Z = toward camera)
             angvel: Vec3::ZERO,
         },
+        Marble, // Mark this as the marble to follow
     ));
 
     // Add camera - positioned behind and above like racing games
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 6.0, -18.0)
-            .looking_at(Vec3::new(0.0, 0.0, 5.0), Vec3::Y),
-        ..default()
-    });
+    commands.spawn((
+        Camera3dBundle {
+            transform: Transform::from_xyz(0.0, 6.0, -18.0)
+                .looking_at(Vec3::new(0.0, 0.0, 5.0), Vec3::Y),
+            ..default()
+        },
+        FollowCamera, // Mark this as the following camera
+    ));
 
     // Add directional light (like sun)
     commands.spawn(DirectionalLightBundle {
@@ -158,4 +171,32 @@ fn setup_scene(
         scaled_shape_subdivision: 10,
         force_update_from_transform_changes: false,
     });
+}
+
+fn camera_follow_system(
+    mut camera_query: Query<&mut Transform, (With<FollowCamera>, Without<Marble>)>,
+    marble_query: Query<&Transform, (With<Marble>, Without<FollowCamera>)>,
+    time: Res<Time>,
+) {
+    if let (Ok(mut camera_transform), Ok(marble_transform)) =
+        (camera_query.get_single_mut(), marble_query.get_single())
+    {
+        // Camera offset relative to marble (behind and above)
+        let camera_offset = Vec3::new(0.0, 5.0, -9.0);
+
+        // Target camera position
+        let target_camera_pos = marble_transform.translation + camera_offset;
+
+        // Smooth camera movement using interpolation
+        let lerp_speed = 3.0; // Adjust for faster/slower camera following
+        let current_pos = camera_transform.translation;
+        let new_pos = current_pos.lerp(target_camera_pos, lerp_speed * time.delta_seconds());
+
+        // Update camera position
+        camera_transform.translation = new_pos;
+
+        // Make camera look at the marble (with slight forward offset for better view)
+        let look_target = marble_transform.translation + Vec3::new(0.0, 0.0, 3.0);
+        camera_transform.look_at(look_target, Vec3::Y);
+    }
 }
