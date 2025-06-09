@@ -1,0 +1,12 @@
+[package]
+name = "marble_run"
+version = "0.1.0"
+edition = "2024"
+authors = ["Lucas F.Martins <dyncoch@gmail.com>"]
+
+[dependencies]
+bevy = { version = "0.14", features = ["default"] }
+
+# For WebAssembly builds later
+[target.wasm32-unknown-unknown.dependencies]
+web-sys = "0.3"
